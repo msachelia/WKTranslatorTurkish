@@ -1,6 +1,8 @@
+using System.Collections.Generic;
 using System.IO;
 using TMPro;
 using UnityEngine;
+using UnityEngine.TextCore.LowLevel;
 
 namespace WKTranslator;
 
@@ -25,19 +27,35 @@ public static class FontLoader
 
         if (string.IsNullOrEmpty(fontPath)) return;
 
-        // Load bytes and create Unity Font
-        byte[] fontData = File.ReadAllBytes(fontPath);
-        Font unityFont = new Font();
-        
-        // TODO: Create a dynamic font from OS/File data.
-        // AND/OR by Using an AssetBundle containing the TMP_Font.
-        unityFont = new Font(fontPath);
+        var unityFont = new Font(fontPath);
         
         // Create TMPro Asset
-        CustomFont = TMP_FontAsset.CreateFontAsset(unityFont);
+        CustomFont = TMP_FontAsset.CreateFontAsset(
+            unityFont,
+            90,
+            9,
+            GlyphRenderMode.SDFAA,
+            1024,
+            1024,
+            AtlasPopulationMode.Dynamic,
+            true
+        );
         CustomFont.name = "WK_CustomFont";
         
-        // TODO: Add support for characters usually missing (Cyrillic, etc)
+        var defaultFont = TMP_Settings.defaultFontAsset;
+        if (defaultFont != null)
+        {
+            if (defaultFont.fallbackFontAssetTable == null)
+            {
+                defaultFont.fallbackFontAssetTable = [];
+            }
+            
+            if (!defaultFont.fallbackFontAssetTable.Contains(CustomFont))
+            {
+                defaultFont.fallbackFontAssetTable.Add(CustomFont);
+            }
+        }
+        
         // In theory they should work, but dunno
         LogManager.Info($"Loaded custom font: {Path.GetFileName(fontPath)}");
     }

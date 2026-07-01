@@ -1,0 +1,6 @@
+<Project>
+    <PropertyGroup>
+        <WhiteKnuckleDir>/mnt/LinuxData/SteamLibrary/steamapps/common/White Knuckle/</WhiteKnuckleDir>
+        <CopyToBepInExPluginsDir>true</CopyToBepInExPluginsDir>
+    </PropertyGroup>
+</Project>

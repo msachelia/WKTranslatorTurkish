@@ -14,6 +14,7 @@ using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.SceneManagement;
 using Object = UnityEngine.Object;
+using Random = System.Random;
 
 namespace WKTranslator;
 
@@ -114,6 +115,7 @@ public class Plugin : BaseUnityPlugin
     {
         var newGameObject = new GameObject("WKTranslationManager");
         newGameObject.AddComponent<WKTranslationManager>();
+        DontDestroyOnLoad(newGameObject);
     }
 
     private void ClearAll()
@@ -223,7 +225,7 @@ private void LoadTranslations(string filepath, TranslationConfig config)
         }
         catch
         {
-            //
+            /**/
         }
     }
     
