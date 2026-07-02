@@ -20,7 +20,7 @@ public class WKTranslationManager : MonoBehaviour
     private static readonly int MainTexture = Shader.PropertyToID("_MainTex");
 
     private static List<string> untranslatedText = [];
-    
+
     public void Awake()
     {
         if (Instance is not null && Instance != this)
@@ -33,7 +33,7 @@ public class WKTranslationManager : MonoBehaviour
         Instance = this;
         LogManager.Info("WKTranslationManager Awake");
         DontDestroyOnLoad(gameObject);
-        
+
         SceneManager.sceneLoaded += OnSceneLoaded;
     }
 
@@ -56,12 +56,12 @@ public class WKTranslationManager : MonoBehaviour
             foreach (var t in tmps) AddToDict(t.text);
         }
     }
-    
+
     public void DumpStringsFromCode()
     {
         // Target "Assembly-CSharp", which is where the game's specific logic lives
         var asm = Assembly.Load("Assembly-CSharp");
-    
+
         foreach (var type in asm.GetTypes())
         {
             // Look for static string fields (common for constants/dialogue)
@@ -89,8 +89,8 @@ public class WKTranslationManager : MonoBehaviour
 
             // Use reflection to find every string field inside this object
             FieldInfo[] fields = data.GetType().GetFields(
-                BindingFlags.Public | 
-                BindingFlags.NonPublic | 
+                BindingFlags.Public |
+                BindingFlags.NonPublic |
                 BindingFlags.Instance
             );
 
@@ -113,7 +113,7 @@ public class WKTranslationManager : MonoBehaviour
             }
         }
     }
-    
+
     public void DumpAllPrefabs()
     {
         // This finds every GameObject Unity has in memory, including un-instantiated Prefabs
@@ -156,21 +156,21 @@ public class WKTranslationManager : MonoBehaviour
         if (untranslatedText.Contains(txt)) return;
         untranslatedText.Add(txt);
     }
-    
+
     public void DumpTheText()
     {
         LoadEverythingThenDump();
-        
+
         DumpAllHiddenAssets();
         DumpStringsFromCode();
         DumpAllScriptableObjects();
         DumpAllPrefabs();
-        
+
         var pluginFolder = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
         if (pluginFolder == null) return;
-        
+
         var filePath = Path.Combine(pluginFolder, "untranslated.json");
-        
+
         Dictionary<string, string> untranslatedDict = new();
         foreach (var text in untranslatedText)
         {
@@ -180,23 +180,23 @@ public class WKTranslationManager : MonoBehaviour
 
         // Use JsonConvert for dictionaries + Formatting.Indented for readability
         var json = JsonConvert.SerializeObject(untranslatedDict, Formatting.Indented);
-    
+
         // Fix: WriteAllText handles creating/opening/writing/closing automatically
         File.WriteAllText(filePath, json);
     }
-    
+
     public async void OnSceneLoaded(Scene scene, LoadSceneMode mode)
     {
         CommandConsole.AddCommand("dumpalltext", _ => DumpTheText(), false);
         if (!CanContinueScene(scene.name)) return;
 
         await PrepareAsync();
-        
+
         ReplaceAllMaterial();
         ReplaceTextures();
         ReplaceAllMaterial();
         ReplaceOnSources();
-        
+
         CommandConsole.AddCommand("startscanner", _ => TextScanner.RunScanner(), false);
         CommandConsole.AddCommand("endscanner", _ => TextScanner.StopScanner(), false);
         CommandConsole.AddCommand("reloadtranslation", _ => Plugin.Instance.ReloadLanguage(), false);
@@ -229,7 +229,7 @@ public class WKTranslationManager : MonoBehaviour
             }
         }
     }
-    
+
     #region Text Replacement
 
     private bool ValidForTranslation(GameObject go)
@@ -238,22 +238,19 @@ public class WKTranslationManager : MonoBehaviour
         // ignoring "assets" (prefabs) that haven't been instantiated yet.
         return go.scene.isLoaded || go.scene.name == "DontDestroyOnLoad";
     }
-    
+
     // Helper method to apply translation
     public static void TryTranslate(TMP_Text txtComponent)
     {
         if (txtComponent == null || string.IsNullOrEmpty(txtComponent.text)) return;
 
-        if (Plugin.Translations.TryGetValue(txtComponent.text, out string translated))
+        if (Plugin.TryGetTranslation(txtComponent.text, out string translated))
         {
             if (txtComponent.text == translated) return;
-            
+
             txtComponent.text = translated;
 
-            if (FontLoader.CustomFont != null && txtComponent.font != FontLoader.CustomFont)
-            {
-                txtComponent.font = FontLoader.CustomFont;
-            }
+            FontLoader.TryReplace(txtComponent);
 
             txtComponent.enableAutoSizing = true;
 
@@ -268,17 +265,19 @@ public class WKTranslationManager : MonoBehaviour
             }
         }
     }
-    
+
     // Helper method to apply legacy translation
     public static void TryTranslateLegacy(Text txtComponent)
     {
         if (txtComponent == null || string.IsNullOrEmpty(txtComponent.text)) return;
 
-        if (Plugin.Translations.TryGetValue(txtComponent.text, out string translated))
+        if (Plugin.TryGetTranslation(txtComponent.text, out string translated))
         {
             if (txtComponent.text == translated) return;
-            
+
             txtComponent.text = translated;
+
+            FontLoader.TryReplace(txtComponent);
 
             txtComponent.resizeTextForBestFit = true;
             txtComponent.resizeTextMaxSize = Mathf.FloorToInt(txtComponent.fontSize);
@@ -302,21 +301,18 @@ public class WKTranslationManager : MonoBehaviour
             if (string.IsNullOrEmpty(__0)) return true;
 
             //untranslatedText.Add(__0);
-            
-            if (Plugin.Translations.TryGetValue(__0, out var tr))
+
+            if (Plugin.TryGetTranslation(__0, out var tr))
             {
                 __0 = tr;
 
-                if (FontLoader.CustomFont != null && __instance.font != FontLoader.CustomFont)
-                {
-                    __instance.font = FontLoader.CustomFont;
-                }
+                FontLoader.TryReplace(__instance);
             }
-            
+
             return true;
         }
     }
-    
+
     [HarmonyPatch(typeof(Text))]
     public static class LegacyTextPatches
     {
@@ -326,28 +322,30 @@ public class WKTranslationManager : MonoBehaviour
             if (string.IsNullOrEmpty(__0)) return true;
 
             //untranslatedText.Add(__0);
-            
-            if (Plugin.Translations.TryGetValue(__0, out var tr))
+
+            if (Plugin.TryGetTranslation(__0, out var tr))
             {
                 __0 = tr;
+
+                FontLoader.TryReplace(__instance);
             }
-            
+
             return true;
         }
     }
 
     #endregion
-    
+
     #region Material Replacement
 
     private void ReplaceAllMaterial()
     {
-        
+
         foreach (var material in Resources.FindObjectsOfTypeAll<Material>())
         {
             if (!material.HasProperty(MainTexture)) continue;
             if (material?.mainTexture is null) continue;
-            
+
             LogManager.Debug($"Found {material.mainTexture.name}");
 
             Texture2D tex;
@@ -361,13 +359,13 @@ public class WKTranslationManager : MonoBehaviour
             }
 
             if (tex == null) continue;
-            
+
             LogManager.Debug($"Replacing {material.mainTexture.name}");
             material.mainTexture = tex;
         }
-        
+
     }
-    
+
     private void ReplaceTextures()
     {
         foreach (var img in Resources.FindObjectsOfTypeAll<Image>())
@@ -375,7 +373,7 @@ public class WKTranslationManager : MonoBehaviour
             if (img.sprite is null) continue;
 
             Texture2D newTex;
-            
+
             if (!Plugin.TextureRegistry.ContainsKey("_ALL"))
             {
                 if (!Plugin.TextureRegistry.TryGetValue(img.sprite.name, out newTex)) continue;
@@ -384,11 +382,11 @@ public class WKTranslationManager : MonoBehaviour
             {
                 newTex = Plugin.TextureRegistry.First(p => p.Key == "_ALL").Value;
             }
-          
-            
-            
+
+
+
             var oldSprite = img.sprite;
-            
+
             var fullRect = new Rect(0, 0, newTex.width, newTex.height);
 
             var newSprite = Sprite.Create(
@@ -400,17 +398,17 @@ public class WKTranslationManager : MonoBehaviour
                 SpriteMeshType.FullRect,
                 oldSprite.border
             );
-            
+
             img.sprite = newSprite;
             img.overrideSprite = newSprite;
-            
+
             if (img.rectTransform is not null)
                 LayoutRebuilder.ForceRebuildLayoutImmediate(img.rectTransform);
-            
+
             // LogManager.Debug($"Replaced texture: {img.sprite.name}");
         }
     }
-    
+
     [HarmonyPatch(typeof(Sprite))]
     private static class SpritePatches
     {
@@ -426,7 +424,7 @@ public class WKTranslationManager : MonoBehaviour
             __result = texture;
         }
     }
-    
+
     static void OverrideRendererTexture(SpriteRenderer sr, Texture2D newTex)
     {
         var mpb = new MaterialPropertyBlock();
@@ -461,7 +459,7 @@ public class WKTranslationManager : MonoBehaviour
                 {
                     replacement = Plugin.TextureRegistry.First(p => p.Key == "_ALL").Value;
                 }
-                
+
                 if (replacement != null)
                     OverrideRendererTexture(__instance, replacement);
             }
@@ -471,11 +469,11 @@ public class WKTranslationManager : MonoBehaviour
             }
         }
     }
-    
+
     #endregion
-    
+
     #region AudioReplacement
-    
+
     private void ReplaceOnSources()
     {
         foreach (var src in FindObjectsOfType<AudioSource>(true))
@@ -498,13 +496,13 @@ public class WKTranslationManager : MonoBehaviour
             var wasPlaying = src.isPlaying;
             var playingOnAwake = src.playOnAwake;
             src.clip = newClip;
-            
+
             if (wasPlaying || playingOnAwake)
                 src.Play();
             LogManager.Debug($"Replaced AudioSource Clip on {src.gameObject.name} ({clipName})");
         }
     }
-    
+
     [HarmonyPatch]
     private static class AudioSourcePatches
     {
@@ -547,14 +545,14 @@ public class WKTranslationManager : MonoBehaviour
         // Shared logic
         private static void SwapClip(AudioSource src)
         {
-            if (src?.clip is null) 
+            if (src?.clip is null)
                 return;
 
             var name = src.clip.name;
             AudioClip clip;
             if (!Plugin.AudioRegistry.ContainsKey("_ALL"))
             {
-                if (!Plugin.AudioRegistry.TryGetValue(name, out clip)) 
+                if (!Plugin.AudioRegistry.TryGetValue(name, out clip))
                     return;
             }
             else
@@ -566,11 +564,11 @@ public class WKTranslationManager : MonoBehaviour
             // LogManager.Debug($"[PlayPatch] Swapped '{name}' → '{clip.name}'");
         }
     }
-    
+
     #endregion
-    
+
     #region Helper Methods
-    
+
     private bool CanContinueScene(string sceneName)
     {
         return sceneName switch
@@ -578,6 +576,6 @@ public class WKTranslationManager : MonoBehaviour
             _ => true
         };
     }
-    
+
     #endregion
 }
